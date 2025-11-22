@@ -25,6 +25,28 @@ async function run() {
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
 
+      
+      
+      const db = client.db('zap_Shift_db')
+      const parcelCollections = db.collection('parcels');
+
+
+      // Parcel API
+
+      app.get('/parcels', async(req, res) => {
+          
+      })
+
+      app.post('/parcels', async(req, res) => {
+          const parcel = req.body;
+          const result = await parcelCollections.insertOne(parcel)
+          res.send(result)
+      })
+      
+      
+      
+      
+      
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
