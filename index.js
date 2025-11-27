@@ -8,6 +8,21 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 // stripe Payment GateWay
 const stripe = require("stripe")(process.env.STRIPE_SECRET);
 
+
+
+const crypto = require("crypto");
+
+function generateTrackingId() {
+  const prefix = "Zap";
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const random = crypto.randomBytes(3).toString("hex").toUpperCase();
+  return `${prefix}-${date}-${random}`;
+
+}
+
+
+
+
 //  MiddleWare
 
 app.use(express.json());
@@ -95,6 +110,7 @@ async function run() {
         mode: "payment",
         metadata: {
           parcelId: paymentInfo.parcelId,
+          parcelName: paymentInfo.parcelName,
         },
         customer_email: paymentInfo.senderEmail,
         success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
@@ -113,12 +129,15 @@ async function run() {
 
       console.log(session);
 
+      const trackingId = generateTrackingId()
+
       if (session.payment_status === "paid") {
         const id = session.metadata.parcelId;
         const query = { _id: new ObjectId(id) };
         const update = {
           $set: {
             paymentStatus: "paid",
+            trackingId: trackingId
           },
         };
         const result = await parcelCollections.updateOne(query, update);
@@ -132,15 +151,17 @@ async function run() {
           transactionId: session.payment_intent,
           paymentStatus: session.payment_status,
           paidAt: new Date(),
-          trackingId: "",
         };
         if (session.payment_status === "paid") {
           const resultPayment = await paymentCollection.insertOne(payment);
           res.send({
             success: true,
+            trackingId: trackingId,
             modifyParcel: result,
+            transactionId: session.payment_intent,
             paymentInfo: resultPayment,
           });
+          
         }
       }
 
@@ -170,7 +191,6 @@ async function run() {
         mode: "payment",
         metadata: {
           parcelId: paymentInfo.parcelId,
-          parcelName: paymentInfo.parcelName,
         },
         success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success`,
         cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled`,
