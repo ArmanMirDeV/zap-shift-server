@@ -10,7 +10,6 @@ const stripe = require("stripe")(process.env.STRIPE_SECRET);
 
 const crypto = require("crypto");
 
-
 // firebase admin
 const admin = require("firebase-admin");
 
@@ -19,9 +18,6 @@ const serviceAccount = require("./zap-shift-12580-firebase.json");
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
-
-
-
 
 function generateTrackingId() {
   const prefix = "Zap";
@@ -35,36 +31,24 @@ function generateTrackingId() {
 app.use(express.json());
 app.use(cors());
 
-
-
-const verifyFBToken = async(req, res, next) => {
-  
-  
+const verifyFBToken = async (req, res, next) => {
   const token = req.headers.authorization;
 
   if (!token) {
-    return res.status(401).send({message: 'UnaAuthorized Access'})
+    return res.status(401).send({ message: "UnaAuthorized Access" });
   }
 
   try {
-    const idToken = token.split(' ')[1];
+    const idToken = token.split(" ")[1];
     const decoded = await admin.auth().verifyIdToken(idToken);
-    console.log('Decoded in the the Token', decoded);
+    console.log("Decoded in the the Token", decoded);
     req.decoded_email = decoded.email;
 
-
-
-
     next();
-    
+  } catch (err) {
+    return res.status(401).send({ message: "UnAuthorized Access" });
   }
-  catch (err) {
-    return res.status(401).send({ message: 'UnAuthorized Access' });
-  }
-  
-}
-
-
+};
 
 const uri = `mongodb+srv://${process.env.DB_User}:${process.env.DB_Pass}@kajwala.9fiaw1u.mongodb.net/?appName=kajwala`;
 
@@ -84,6 +68,19 @@ async function run() {
     const db = client.db("zap_Shift_db");
     const parcelCollections = db.collection("parcels");
     const paymentCollection = db.collection("Payments");
+    const userCollection = db.collection("Users");
+
+    // Users Related APIs
+
+    app.post("/users", async (req, res) => {
+      const user = req.body;
+      user.role = "user";
+      user.createdAt = new Date();
+
+      const result = await userCollection.insertOne(user);
+
+      res.send(result)
+    });
 
     // Parcel API
 
@@ -255,7 +252,6 @@ async function run() {
     app.get("/payments", verifyFBToken, async (req, res) => {
       const email = req.query.email;
       const query = {};
-      
 
       if (email) {
         query.customerEmail = email;
@@ -263,10 +259,10 @@ async function run() {
         // check email address
 
         if (email !== req.decoded_email) {
-          return res.status(403).send({ message: 'Forbidden Access' });
+          return res.status(403).send({ message: "Forbidden Access" });
         }
       }
-      const cursor = paymentCollection.find(query);
+      const cursor = paymentCollection.find(query).sort({ paidAt: -1 });
       const result = await cursor.toArray();
       res.send(result);
     });
@@ -290,5 +286,3 @@ app.get("/", (req, res) => {
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`);
 });
-
-
