@@ -84,7 +84,40 @@ async function run() {
       res.send(result)
     })
 
+    app.get('/riders', async (req, res) => {
+      const query = {}
+       const options = { sort: { createdAt: -1 } };
+      if (req.query.status) {
+        query.status = req.query.status;
 
+      }
+      const cursor = ridersCollection.find(query, options)
+      const result = await cursor.toArray()
+      res.send(result)
+    })
+
+    app.patch('/riders/:id', verifyFBToken, async (req, res) => {
+      const status = req.body.status;
+      const id = req.params.id;
+      const query = {_id: new ObjectId(id)}
+      const updatedDoc = {
+        $set: {
+          status: status
+        }
+      }
+      const result = await ridersCollection.updateOne(query, updatedDoc)
+      if (status === 'Approved') {
+        const email = req.body.email;
+        const userQuery = { email }
+        const updateUser = {
+          $set: {
+            role: 'rider'
+          }
+        }
+        const userResult = await userCollection.updateOne(userQuery, updateUser)
+      }
+      res.send(result)
+    } )
 
 
 
