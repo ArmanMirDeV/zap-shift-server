@@ -69,6 +69,26 @@ async function run() {
     const parcelCollections = db.collection("parcels");
     const paymentCollection = db.collection("Payments");
     const userCollection = db.collection("Users");
+    const ridersCollection = db.collection("Riders");
+
+
+
+    // Riders Related APIs
+
+
+    app.post('/riders', async (req, res) => {
+      const rider = req.body;
+      rider.status = 'pending'
+      rider.createdAt = new Date();
+      const result = await ridersCollection.insertOne(rider)
+      res.send(result)
+    })
+
+
+
+
+
+
 
     // Users Related APIs
 
