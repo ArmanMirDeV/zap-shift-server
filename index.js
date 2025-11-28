@@ -77,9 +77,16 @@ async function run() {
       user.role = "user";
       user.createdAt = new Date();
 
+      const email = user.email;
+      const userExists = await userCollection.findOne({ email });
+
+      if (userExists) {
+        return res.send({ message: "User Exists" });
+      }
+
       const result = await userCollection.insertOne(user);
 
-      res.send(result)
+      res.send(result);
     });
 
     // Parcel API
