@@ -142,12 +142,10 @@ async function run() {
       if (searchText) {
         // query.displayName = {$regex: searchText, $options: 'i'};
 
-
-        query.$or=  [
-          {displayName:{$regex: searchText, $options: 'i'} },
-          {email:{$regex: searchText, $options: 'i'} },
-        ]
-
+        query.$or = [
+          { displayName: { $regex: searchText, $options: "i" } },
+          { email: { $regex: searchText, $options: "i" } },
+        ];
       }
 
       const cursor = userCollection
@@ -207,12 +205,15 @@ async function run() {
 
     app.get("/parcels", async (req, res) => {
       const query = {};
-      const { email } = req.query;
+      const { email, deliveryStatus } = req.query;
 
       // /parcel?email=''&
 
       if (email) {
         query.senderEmail = email;
+      }
+      if (deliveryStatus) {
+        query.deliveryStatus = deliveryStatus;
       }
       const options = { sort: { createdAt: -1 } };
 
@@ -308,6 +309,7 @@ async function run() {
         const update = {
           $set: {
             paymentStatus: "paid",
+            deliveryStatus: "pending-pickup",
             trackingId: trackingId,
           },
         };
