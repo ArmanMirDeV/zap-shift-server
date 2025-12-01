@@ -274,9 +274,11 @@ async function run() {
         query.riderEmail = riderEmail;
       }
 
-      if (deliveryStatus) {
+      if (deliveryStatus !== "parcel_delivered") {
         // query.deliveryStatus = {$in: ['rider_arriving','driver_assigned']};
-        query.deliveryStatus = {$nin: ['parcel_delivered']};
+        query.deliveryStatus = { $nin: ["parcel_delivered"] };
+      } else {
+        query.deliveryStatus = deliveryStatus;
       }
 
       const cursor = parcelCollections.find(query);
@@ -299,28 +301,39 @@ async function run() {
       res.send(result);
     });
 
-
-
-    app.patch('/parcels/:id/status', async (req, res) => {
-      const {deliveryStatus } =req.body;
-      const query = { _id: new ObjectId(req.params.id) }
+    app.patch("/parcels/:id/status", async (req, res) => {
+      const { deliveryStatus, riderId } = req.body;
+      const query = { _id: new ObjectId(req.params.id) };
       const updatedDoc = {
         $set: {
-          deliveryStatus: deliveryStatus
-        }
+          deliveryStatus: deliveryStatus,
+        },
+      };
+      if (deliveryStatus === "rejected_by_rider") {
+        const riderQuery = { _id: new ObjectId(riderId) };
+
+        const riderUpdatedDoc = {
+          $set: {
+            workStatus: "available",
+          },
+        };
       }
-      if (deliveryStatus === 'rejected_by_rider') {
-        updatedDoc.$set.riderEmail = null
+      if (deliveryStatus === "parcel_delivered") {
+        const riderQuery = { _id: new ObjectId(riderId) };
+        const riderUpdatedDoc = {
+          $set: {
+            workStatus: "available",
+          },
+        };
+        const riderResult = await ridersCollection.updateOne(
+          riderQuery,
+          riderUpdatedDoc
+        );
       }
-      const result = await parcelCollections.updateOne(query, updatedDoc)
+      const result = await parcelCollections.updateOne(query, updatedDoc);
 
-      res.send(result)
-    })
-
-
-
-
-
+      res.send(result);
+    });
 
     app.delete("/parcels/:id", async (req, res) => {
       const id = req.params.id;
