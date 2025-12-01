@@ -233,6 +233,7 @@ async function run() {
       res.send(result);
     });
 
+    // Todo: rename this to be specific like /parcels/:id/assign
     app.patch("/parcels/:id", async (req, res) => {
       const { riderId, riderName, riderEmail } = req.body;
       const id = req.params.id;
@@ -274,7 +275,8 @@ async function run() {
       }
 
       if (deliveryStatus) {
-        query.deliveryStatus = deliveryStatus;
+        // query.deliveryStatus = {$in: ['rider_arriving','driver_assigned']};
+        query.deliveryStatus = {$nin: ['parcel_delivered']};
       }
 
       const cursor = parcelCollections.find(query);
@@ -296,6 +298,29 @@ async function run() {
       const result = await parcelCollections.insertOne(parcel);
       res.send(result);
     });
+
+
+
+    app.patch('/parcels/:id/status', async (req, res) => {
+      const {deliveryStatus } =req.body;
+      const query = { _id: new ObjectId(req.params.id) }
+      const updatedDoc = {
+        $set: {
+          deliveryStatus: deliveryStatus
+        }
+      }
+      if (deliveryStatus === 'rejected_by_rider') {
+        updatedDoc.$set.riderEmail = null
+      }
+      const result = await parcelCollections.updateOne(query, updatedDoc)
+
+      res.send(result)
+    })
+
+
+
+
+
 
     app.delete("/parcels/:id", async (req, res) => {
       const id = req.params.id;
