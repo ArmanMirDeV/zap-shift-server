@@ -70,6 +70,7 @@ async function run() {
     const paymentCollection = db.collection("Payments");
     const userCollection = db.collection("Users");
     const ridersCollection = db.collection("Riders");
+    const trackingsCollection = db.collection("Trackings");
 
     // middlaWare with DataBase access | before allowing admin activity
     // must be used after verifyFBToken middleWare
@@ -84,6 +85,18 @@ async function run() {
       }
 
       next();
+    };
+
+    const logTracking = async (trackingId, status) => {
+      const log = {
+        trackingId,
+        status,
+        details: status.split("-").join(" "),
+        createdAt: new Date(),
+      };
+      const result = await trackingsCollection.insertOne(log);
+
+      return result;
     };
 
     // Riders Related APIs
@@ -235,7 +248,7 @@ async function run() {
 
     // Todo: rename this to be specific like /parcels/:id/assign
     app.patch("/parcels/:id", async (req, res) => {
-      const { riderId, riderName, riderEmail } = req.body;
+      const { riderId, riderName, riderEmail, trackingId } = req.body;
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const updatedDoc = {
@@ -262,6 +275,10 @@ async function run() {
         riderQuery,
         riderUpdatedDoc
       );
+
+      // Log Tracking
+
+      logTracking(trackingId, "driver_assigned");
 
       res.send(riderResult);
     });
@@ -302,7 +319,7 @@ async function run() {
     });
 
     app.patch("/parcels/:id/status", async (req, res) => {
-      const { deliveryStatus, riderId } = req.body;
+      const { deliveryStatus, riderId, trackingId } = req.body;
       const query = { _id: new ObjectId(req.params.id) };
       const updatedDoc = {
         $set: {
@@ -331,6 +348,12 @@ async function run() {
         );
       }
       const result = await parcelCollections.updateOne(query, updatedDoc);
+
+
+      // log tracking
+
+      logTracking(trackingId, deliveryStatus)
+
 
       res.send(result);
     });
@@ -426,6 +449,9 @@ async function run() {
         };
         if (session.payment_status === "paid") {
           const resultPayment = await paymentCollection.insertOne(payment);
+
+          logTracking(trackingId, "pending-pickup");
+
           res.send({
             success: true,
             trackingId: trackingId,
