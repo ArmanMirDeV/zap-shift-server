@@ -91,7 +91,7 @@ async function run() {
       const log = {
         trackingId,
         status,
-        details: status.split("-").join(" "),
+        details: status.split("_").join(" "),
         createdAt: new Date(),
       };
       const result = await trackingsCollection.insertOne(log);
@@ -312,6 +312,9 @@ async function run() {
 
     app.post("/parcels", async (req, res) => {
       const parcel = req.body;
+
+     
+
       // Parcel Created Time
       parcel.createdAt = new Date();
       const result = await parcelCollections.insertOne(parcel);
@@ -450,7 +453,7 @@ async function run() {
         if (session.payment_status === "paid") {
           const resultPayment = await paymentCollection.insertOne(payment);
 
-          logTracking(trackingId, "pending-pickup");
+          logTracking(trackingId, "parcel_paid");
 
           res.send({
             success: true,
@@ -513,6 +516,21 @@ async function run() {
       const result = await cursor.toArray();
       res.send(result);
     });
+
+
+    // trackings Related APIs
+    
+    app.get('/trackings/:trackingId/logs', async (req, res) => {
+      const trackingId = req.params.trackingId;
+      const query = { trackingId }
+      const result = await trackingsCollection.find(query).toArray();
+      res.send(result)
+    })
+
+
+
+
+
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
