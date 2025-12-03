@@ -80,6 +80,17 @@ async function run() {
       const query = { email };
 
       const user = await userCollection.findOne(query);
+      if (!user || user.role !== "rider") {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+
+      next();
+    };
+    const verifyRider = async (req, res, next) => {
+      const email = req.decoded_email;
+      const query = { email };
+
+      const user = await userCollection.findOne(query);
       if (!user || user.role !== "admin") {
         return res.status(403).send({ message: "forbidden access" });
       }
@@ -310,13 +321,31 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/parcels/delivery-status/stats", async (req, res) => {
+      const pipeLine = [
+        {
+          $group: {
+            _id: "$deliveryStatus",
+            count: { $sum: 1 },
+          },
+        },
+      ];
+      const result = await parcelCollections.aggregate(pipeLine).toArray();
+
+      res.send(result);
+    });
+
     app.post("/parcels", async (req, res) => {
       const parcel = req.body;
 
-     
+      const trackingId = generateTrackingId();
 
       // Parcel Created Time
       parcel.createdAt = new Date();
+      parcel.trackingId = trackingId;
+
+      logTracking(trackingId, "parcel_created");
+
       const result = await parcelCollections.insertOne(parcel);
       res.send(result);
     });
@@ -352,11 +381,9 @@ async function run() {
       }
       const result = await parcelCollections.updateOne(query, updatedDoc);
 
-
       // log tracking
 
-      logTracking(trackingId, deliveryStatus)
-
+      logTracking(trackingId, deliveryStatus);
 
       res.send(result);
     });
@@ -392,6 +419,7 @@ async function run() {
         metadata: {
           parcelId: paymentInfo.parcelId,
           parcelName: paymentInfo.parcelName,
+          trackingId: paymentInfo.trackingId,
         },
         customer_email: paymentInfo.senderEmail,
         success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
@@ -424,8 +452,9 @@ async function run() {
           trackingId: paymentExists.trackingId,
         });
       }
-
-      const trackingId = generateTrackingId();
+      //use the previous tracking id created during the parcel create which was set to the session metadata during session creation
+      // const trackingId = generateTrackingId();
+      const trackingId = session.metadata.trackingId;
 
       if (session.payment_status === "paid") {
         const id = session.metadata.parcelId;
@@ -434,7 +463,7 @@ async function run() {
           $set: {
             paymentStatus: "paid",
             deliveryStatus: "pending-pickup",
-            trackingId: trackingId,
+            // trackingId: trackingId,
           },
         };
         const result = await parcelCollections.updateOne(query, update);
@@ -450,12 +479,12 @@ async function run() {
           paidAt: new Date(),
           trackingId: trackingId,
         };
-        if (session.payment_status === "paid") {
+        {
           const resultPayment = await paymentCollection.insertOne(payment);
 
           logTracking(trackingId, "parcel_paid");
 
-          res.send({
+          return res.send({
             success: true,
             trackingId: trackingId,
             modifyParcel: result,
@@ -465,39 +494,39 @@ async function run() {
         }
       }
 
-      res.send({ success: false });
+      return res.send({ success: false });
     });
 
     // Old
-    app.post("/create-checkout-session", async (req, res) => {
-      const paymentInfo = req.body;
-      const amount = parseInt(paymentInfo.cost) * 100;
-      const session = await stripe.checkout.sessions.create({
-        line_items: [
-          {
-            // Provide the exact Price ID (for example, price_1234) of the product you want to sell
-            price_data: {
-              currency: "USD",
-              unit_amount: amount,
-              product_data: {
-                name: paymentInfo.parcelName,
-              },
-            },
-            quantity: 1,
-          },
-        ],
-        customer_email: paymentInfo.senderEmail,
+    // app.post("/create-checkout-session", async (req, res) => {
+    //   const paymentInfo = req.body;
+    //   const amount = parseInt(paymentInfo.cost) * 100;
+    //   const session = await stripe.checkout.sessions.create({
+    //     line_items: [
+    //       {
+    //         // Provide the exact Price ID (for example, price_1234) of the product you want to sell
+    //         price_data: {
+    //           currency: "USD",
+    //           unit_amount: amount,
+    //           product_data: {
+    //             name: paymentInfo.parcelName,
+    //           },
+    //         },
+    //         quantity: 1,
+    //       },
+    //     ],
+    //     customer_email: paymentInfo.senderEmail,
 
-        mode: "payment",
-        metadata: {
-          parcelId: paymentInfo.parcelId,
-        },
-        success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success`,
-        cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled`,
-      });
-      console.log(session);
-      res.send({ url: session.url });
-    });
+    //     mode: "payment",
+    //     metadata: {
+    //       parcelId: paymentInfo.parcelId,
+    //     },
+    //     success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success`,
+    //     cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-cancelled`,
+    //   });
+    //   console.log(session);
+    //   res.send({ url: session.url });
+    // });
 
     app.get("/payments", verifyFBToken, async (req, res) => {
       const email = req.query.email;
@@ -517,20 +546,14 @@ async function run() {
       res.send(result);
     });
 
-
     // trackings Related APIs
-    
-    app.get('/trackings/:trackingId/logs', async (req, res) => {
+
+    app.get("/trackings/:trackingId/logs", async (req, res) => {
       const trackingId = req.params.trackingId;
-      const query = { trackingId }
+      const query = { trackingId };
       const result = await trackingsCollection.find(query).toArray();
-      res.send(result)
-    })
-
-
-
-
-
+      res.send(result);
+    });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
