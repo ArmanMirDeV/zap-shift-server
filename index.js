@@ -112,13 +112,118 @@ async function run() {
 
     // Riders Related APIs
 
-    app.post("/riders", async (req, res) => {
-      const rider = req.body;
-      rider.status = "pending";
-      rider.createdAt = new Date();
-      const result = await ridersCollection.insertOne(rider);
-      res.send(result);
-    });
+   app.get(
+     "/riders/delivery-per-day",
+     verifyFBToken,
+     verifyRider,
+     async (req, res) => {
+       const email = req.query.email;
+
+       const pipeline = [
+         {
+           $match: {
+             riderEmail: email,
+             deliveryStatus: "parcel_delivered",
+           },
+         },
+         {
+           $lookup: {
+             from: "trackings",
+             localField: "trackingId",
+             foreignField: "trackingId",
+             as: "parcel_trackings",
+           },
+         },
+         { $unwind: "$parcel_trackings" },
+
+         // FIX: wrong field name was "parcel_tracking"
+         {
+           $match: {
+             "parcel_trackings.status": "parcel_delivered",
+           },
+         },
+
+         // Add a formatted delivery day
+         {
+           $addFields: {
+             deliveryDay: {
+               $dateToString: {
+                 format: "%Y-%m-%d",
+                 date: "$parcel_trackings.createdAt",
+               },
+             },
+           },
+         },
+
+         // FIXED correct $group syntax
+         {
+           $group: {
+             _id: "$deliveryDay",
+             deliveredCount: { $sum: 1 },
+           },
+         },
+
+         // Optional: sort by day
+         { $sort: { _id: 1 } },
+       ];
+
+       const result = await parcelCollections.aggregate(pipeline).toArray();
+       res.send(result);
+     }
+   );
+
+
+    app.get(
+      "/riders/delivery-per-day",
+      verifyFBToken,
+      verifyRider,
+      async (req, res) => {
+        const email = req.query.email;
+
+        // aggregate on parcel
+
+        const pipeLine = [
+          {
+            $match: {
+              riderEmail: email,
+              deliveryStatus: "parcel_delivered",
+            },
+          },
+          {
+            $lookup: {
+              from: "trackings",
+              localField: "trackingId",
+              foreignField: "trackingId",
+              as: "parcel_trackings",
+            },
+          },
+          {
+            $unwind: "$parcel_trackings",
+          },
+          {
+            $match: {
+              "parcel_tracking.status": "parcel_delivered",
+            },
+          },
+          {
+            $addFields: {
+              deliverDay: {
+                $dateToString: {
+                  format: "%Y-%m-%d",
+                  date: "$parcel_trackings.createdAt",
+                },
+              },
+            },
+          },
+          {
+            $group: { id: "$deliveryDay" },
+            deliveredCount: {$sum: 1}
+          },
+        ];
+        const result = await parcelCollections.aggregate(pipeLine).toArray();
+        res.send(result);
+      }
+    );
 
     app.get("/riders", async (req, res) => {
       const { status, district, workStatus } = req.query;
@@ -327,6 +432,13 @@ async function run() {
           $group: {
             _id: "$deliveryStatus",
             count: { $sum: 1 },
+          },
+        },
+        {
+          $project: {
+            status: "$_id",
+            count: 1,
+            // _id: 0
           },
         },
       ];
