@@ -13,7 +13,11 @@ const crypto = require("crypto");
 // firebase admin
 const admin = require("firebase-admin");
 
-const serviceAccount = require("./zap-shift-12580-firebase.json");
+
+
+const decoded = Buffer.from(process.env.FB_SERVICE_KEY, 'base64').toString('utf8')
+const serviceAccount = JSON.parse(decoded);
+
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -29,7 +33,30 @@ function generateTrackingId() {
 //  MiddleWare
 
 app.use(express.json());
-app.use(cors());
+// app.use(cors());
+
+
+const allowedOrigins = [
+  "http://localhost:5173",
+  "https://your-frontend.vercel.app",
+];
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  })
+);
+
+
 
 const verifyFBToken = async (req, res, next) => {
   const token = req.headers.authorization;
@@ -63,7 +90,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
 
     const db = client.db("zap_Shift_db");
     const parcelCollections = db.collection("parcels");
@@ -112,65 +139,65 @@ async function run() {
 
     // Riders Related APIs
 
-   app.get(
-     "/riders/delivery-per-day",
-     verifyFBToken,
-     verifyRider,
-     async (req, res) => {
-       const email = req.query.email;
+  //  app.get(
+  //    "/riders/delivery-per-day",
+  //    verifyFBToken,
+  //    verifyRider,
+  //    async (req, res) => {
+  //      const email = req.query.email;
 
-       const pipeline = [
-         {
-           $match: {
-             riderEmail: email,
-             deliveryStatus: "parcel_delivered",
-           },
-         },
-         {
-           $lookup: {
-             from: "trackings",
-             localField: "trackingId",
-             foreignField: "trackingId",
-             as: "parcel_trackings",
-           },
-         },
-         { $unwind: "$parcel_trackings" },
+  //      const pipeline = [
+  //        {
+  //          $match: {
+  //            riderEmail: email,
+  //            deliveryStatus: "parcel_delivered",
+  //          },
+  //        },
+  //        {
+  //          $lookup: {
+  //            from: "trackings",
+  //            localField: "trackingId",
+  //            foreignField: "trackingId",
+  //            as: "parcel_trackings",
+  //          },
+  //        },
+  //        { $unwind: "$parcel_trackings" },
 
-         // FIX: wrong field name was "parcel_tracking"
-         {
-           $match: {
-             "parcel_trackings.status": "parcel_delivered",
-           },
-         },
+  //        // FIX: wrong field name was "parcel_tracking"
+  //        {
+  //          $match: {
+  //            "parcel_trackings.status": "parcel_delivered",
+  //          },
+  //        },
 
-         // Add a formatted delivery day
-         {
-           $addFields: {
-             deliveryDay: {
-               $dateToString: {
-                 format: "%Y-%m-%d",
-                 date: "$parcel_trackings.createdAt",
-               },
-             },
-           },
-         },
+  //        // Add a formatted delivery day
+  //        {
+  //          $addFields: {
+  //            deliveryDay: {
+  //              $dateToString: {
+  //                format: "%Y-%m-%d",
+  //                date: "$parcel_trackings.createdAt",
+  //              },
+  //            },
+  //          },
+  //        },
 
-         // FIXED correct $group syntax
-         {
-           $group: {
-             _id: "$deliveryDay",
-             deliveredCount: { $sum: 1 },
-           },
-         },
+  //        // FIXED correct $group syntax
+  //        {
+  //          $group: {
+  //            _id: "$deliveryDay",
+  //            deliveredCount: { $sum: 1 },
+  //          },
+  //        },
 
-         // Optional: sort by day
-         { $sort: { _id: 1 } },
-       ];
+  //        // Optional: sort by day
+  //        { $sort: { _id: 1 } },
+  //      ];
 
-       const result = await parcelCollections.aggregate(pipeline).toArray();
-       res.send(result);
-     }
-   );
+  //      const result = await parcelCollections.aggregate(pipeline).toArray();
+  //      res.send(result);
+  //    }
+  //  );
 
 
     app.get(
@@ -668,10 +695,10 @@ async function run() {
     });
 
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    // await client.db("admin").command({ ping: 1 });
+    // console.log(
+    //   "Pinged your deployment. You successfully connected to MongoDB!"
+    // );
   } finally {
     // Ensures that the client will close when you finish/error
     //   await client.close();
